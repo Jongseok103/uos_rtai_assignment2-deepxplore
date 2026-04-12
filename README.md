@@ -1,2 +1,10 @@
-# uos_rtai_assignment2-deepxplore
-RT-AI Assignment 2: DeepXplore differential testing on CIFAR-10 ResNet50 models
+# RT-AI Assignment 2: DeepXplore on CIFAR-10 ResNet50 Models
+
+## Overview
+## Environment Setup
+## Installation
+## Repository Structure
+## How to Run
+## Output
+## Notes on DeepXplore Modifications
+## Deliverables
