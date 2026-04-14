@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.DS_Store
+
+# model weights
+*.pt
+*.pth
+*.ckpt
+
+# logs
+*.logexternal/deepxplore/
