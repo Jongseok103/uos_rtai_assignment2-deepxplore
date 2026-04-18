@@ -10,3 +10,6 @@ __pycache__/
 
 # logs
 *.logexternal/deepxplore/
+
+# local dataset
+data/
