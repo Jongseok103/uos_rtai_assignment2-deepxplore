@@ -2,6 +2,8 @@ __pycache__/
 *.pyc
 .ipynb_checkpoints/
 .DS_Store
+test_output.txt
+results/.mplconfig/
 
 # model weights
 *.pt
@@ -9,7 +11,7 @@ __pycache__/
 *.ckpt
 
 # logs
-*.logexternal/deepxplore/
+*.log
 
 # local dataset
 data/

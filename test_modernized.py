@@ -16,9 +16,9 @@ def check_required_files():
     required = [
         "models/model_a.pth",
         "models/model_b.pth",
-        "external/deepxplore/modernized/run.py",
-        "external/deepxplore/modernized/coverage.py",
-        "external/deepxplore/modernized/common.py",
+        "deepxplore_modernized/run.py",
+        "deepxplore_modernized/coverage.py",
+        "deepxplore_modernized/common.py",
     ]
     missing = [path for path in required if not os.path.exists(path)]
     if missing:
@@ -31,7 +31,7 @@ def main():
         [
             sys.executable,
             "-m",
-            "external.deepxplore.modernized.run",
+            "deepxplore_modernized.run",
             "--max-seeds",
             "1",
             "--steps",

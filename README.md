@@ -15,19 +15,19 @@
 - `src/train_models.py`: CIFAR-10 ResNet50 학습 코드
 - `src/evaluate_two_models.py`: 두 모델의 baseline disagreement 확인용 코드
 - `src/generate_disagreement.py`: 초기에 구현했던 간단한 DeepXplore-style 생성 코드
-- `external/deepxplore/modernized/`: 과제용으로 수정한 DeepXplore 실행 코드
+- `deepxplore_modernized/`: 과제용으로 수정한 DeepXplore 실행 코드
 - `test.py`: 현대화한 DeepXplore를 실행하는 스크립트
 - `results/`: 실행 결과 저장 폴더
 
 ## 실행 환경
 기본 `python` 환경에는 PyTorch가 없을 수 있어서, 별도 conda 환경에서 실행했다. 이 저장소에서 실제 실행에 사용한 환경은 `rtai-a2`였다.
 
-최소 의존성은 [requirements-modernized.txt](/Users/Jongseok/Library%20Mobile%20Documents/com~apple~CloudDocs/Documents/2026%20UOS/Reliable%20and%20Trustworthy%20AI/Assignment2/rtai-assignment2-deepxplore/external/deepxplore/requirements-modernized.txt)에 정리했다.
+제출용 의존성은 루트 `requirements.txt`에 정리했다.
 
 예시:
 
 ```bash
-python -m pip install -r external/deepxplore/requirements-modernized.txt
+python -m pip install -r requirements.txt
 ```
 
 ## 실행 방법
@@ -42,7 +42,7 @@ python test.py
 직접 실행하려면 아래처럼 실행할 수 있다.
 
 ```bash
-python -m external.deepxplore.modernized.run \
+python -m deepxplore_modernized.run \
   --model-a models/model_a.pth \
   --model-b models/model_b.pth \
   --output-dir results/deepxplore_modernized
@@ -74,4 +74,4 @@ python -m external.deepxplore.modernized.run \
 - perturbation norm
 
 ## 참고
-원본 DeepXplore 저장소는 `external/deepxplore/`에 그대로 남겨두었다. 다만 실제 과제 실행은 `external/deepxplore/modernized/` 아래의 PyTorch 코드로 진행했다.
+원본 DeepXplore 저장소는 참고용으로 로컬에 남겨두었지만, 실제 과제 실행은 루트 저장소에 포함한 `deepxplore_modernized/` 코드로 진행했다.
