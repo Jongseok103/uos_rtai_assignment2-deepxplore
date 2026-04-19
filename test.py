@@ -17,9 +17,9 @@ def check_required_files():
     required = [
         "models/model_a.pth",
         "models/model_b.pth",
-        "src/evaluate_two_models.py",
-        "src/generate_disagreement.py",
-        "src/coverage.py",
+        "external/deepxplore/modernized/run.py",
+        "external/deepxplore/modernized/coverage.py",
+        "external/deepxplore/modernized/common.py",
     ]
 
     missing = [p for p in required if not os.path.exists(p)]
@@ -30,28 +30,21 @@ def check_required_files():
 
 
 def summarize_results():
-    baseline_csv = "results/baseline_disagreements.csv"
-    generated_csv = "results/generated_disagreement_summary.csv"
+    output_dir = os.path.abspath("results/deepxplore_modernized")
+    generated_csv = os.path.join(output_dir, "generated_disagreement_summary.csv")
 
-    baseline_imgs = sorted(glob.glob("results/baseline_disagreement_*.png"))
-    generated_imgs = sorted(glob.glob("results/generated_disagreement_*.png"))
+    generated_imgs = sorted(glob.glob(os.path.join(output_dir, "generated_disagreement_*.png")))
 
     print("\n" + "=" * 80)
     print("Result Summary")
     print("=" * 80)
 
-    print(f"Baseline CSV exists: {os.path.exists(baseline_csv)}")
     print(f"Generated CSV exists: {os.path.exists(generated_csv)}")
-    print(f"Baseline figures found: {len(baseline_imgs)}")
     print(f"Generated figures found: {len(generated_imgs)}")
 
-    if os.path.exists(baseline_csv):
-        print(f"- {baseline_csv}")
     if os.path.exists(generated_csv):
         print(f"- {generated_csv}")
 
-    for path in baseline_imgs[:5]:
-        print(f"- {path}")
     for path in generated_imgs[:5]:
         print(f"- {path}")
 
@@ -63,13 +56,25 @@ def main():
 
     check_required_files()
 
-    # Step 1: baseline disagreement evaluation
-    run_command([sys.executable, "src/evaluate_two_models.py"])
+    output_dir = os.path.abspath("results/deepxplore_modernized")
+    os.makedirs(output_dir, exist_ok=True)
 
-    # Step 2: DeepXplore-style disagreement generation
-    run_command([sys.executable, "src/generate_disagreement.py"])
+    # Step 1: run the modernized DeepXplore workflow end-to-end.
+    run_command(
+        [
+            sys.executable,
+            "-m",
+            "external.deepxplore.modernized.run",
+            "--model-a",
+            "models/model_a.pth",
+            "--model-b",
+            "models/model_b.pth",
+            "--output-dir",
+            output_dir,
+        ]
+    )
 
-    # Step 3: final summary
+    # Step 2: final summary
     summarize_results()
 
 
