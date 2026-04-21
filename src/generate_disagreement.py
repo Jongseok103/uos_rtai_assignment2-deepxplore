@@ -19,6 +19,7 @@ CIFAR10_CLASSES = [
 
 
 def set_seed(seed: int = 42) -> None:
+    """실험 다시 돌려도 결과가 크게 안 달라지게 seed 고정하는 함수."""
     random.seed(seed)
     torch.manual_seed(seed)
     if torch.cuda.is_available():
@@ -26,7 +27,9 @@ def set_seed(seed: int = 42) -> None:
 
 
 def build_resnet50_for_cifar10() -> nn.Module:
+    """CIFAR-10용으로 살짝 수정한 ResNet50 만드는 부분."""
     model = models.resnet50(weights=None)
+    # CIFAR-10 입력 크기에 맞게 stem 부분만 간단히 바꿔둠.
     model.conv1 = nn.Conv2d(
         3, 64, kernel_size=3, stride=1, padding=1, bias=False
     )
@@ -36,6 +39,7 @@ def build_resnet50_for_cifar10() -> nn.Module:
 
 
 def load_model(checkpoint_path: str, device: torch.device) -> nn.Module:
+    """checkpoint 불러와서 바로 추론 가능한 상태로 만드는 함수."""
     checkpoint = torch.load(checkpoint_path, map_location=device)
     model = build_resnet50_for_cifar10()
     model.load_state_dict(checkpoint["model_state_dict"])
@@ -45,6 +49,7 @@ def load_model(checkpoint_path: str, device: torch.device) -> nn.Module:
 
 
 def get_test_loader(batch_size: int = 64, num_workers: int = 2) -> DataLoader:
+    """seed 찾을 때 쓸 CIFAR-10 test loader 만드는 함수."""
     mean = (0.4914, 0.4822, 0.4465)
     std = (0.2023, 0.1994, 0.2010)
 
@@ -71,6 +76,7 @@ def get_test_loader(batch_size: int = 64, num_workers: int = 2) -> DataLoader:
 
 
 def denormalize(img_tensor: torch.Tensor) -> torch.Tensor:
+    """저장용 그림 만들 때 이미지 색 범위 복원하는 함수."""
     mean = torch.tensor([0.4914, 0.4822, 0.4465], device=img_tensor.device).view(3, 1, 1)
     std = torch.tensor([0.2023, 0.1994, 0.2010], device=img_tensor.device).view(3, 1, 1)
     img = img_tensor * std + mean
@@ -85,6 +91,7 @@ def collect_seed_disagreements(
     device: torch.device,
     max_seeds: int = 20,
 ) -> List[Dict]:
+    """두 모델이 원래부터 다르게 보는 샘플들을 seed로 모으는 함수."""
     seeds: List[Dict] = []
     global_index = 0
 
@@ -99,6 +106,7 @@ def collect_seed_disagreements(
         preds_b = logits_b.argmax(dim=1)
 
         for i in range(labels.size(0)):
+            # 처음부터 예측이 다른 샘플만 골라야 뒤에서 disagreement 유지하기 편함.
             if preds_a[i].item() != preds_b[i].item():
                 seeds.append({
                     "index": global_index + i,
@@ -116,13 +124,14 @@ def collect_seed_disagreements(
 
 
 def clamp_linf(x_adv: torch.Tensor, x_orig: torch.Tensor, epsilon: float) -> torch.Tensor:
+    """perturbation이 epsilon 범위를 넘지 않게 잘라주는 함수."""
     delta = torch.clamp(x_adv - x_orig, min=-epsilon, max=epsilon)
     return x_orig + delta
 
 
 def normalize_to_valid_range(x_adv: torch.Tensor, x_orig: torch.Tensor) -> torch.Tensor:
-    # Because input is normalized CIFAR-10 tensor, we only use epsilon projection.
-    # Final visualization is denormalized separately.
+    # 입력 자체가 이미 normalize된 상태라 여기서는 epsilon projection만 신경 쓰면 됨.
+    # 시각화할 때는 아래에서 따로 denormalize함.
     return x_adv
 
 
@@ -133,6 +142,8 @@ def compute_coverage_gain(
     model_b: nn.Module,
     x: torch.Tensor,
 ) -> float:
+    """입력 하나 넣었을 때 두 모델 평균 coverage가 얼마나 나오는지 계산함."""
+    # 여기서는 두 모델 coverage 평균을 간단한 점수처럼 사용함.
     coverage_a.reset()
     coverage_b.reset()
 
@@ -151,6 +162,7 @@ def objective_fn(
     target_a: int,
     target_b: int,
 ) -> torch.Tensor:
+    """seed에서 보이던 서로 다른 예측이 유지되도록 target logit을 키우는 함수."""
     """
     Encourage:
     - model A to stay confident on target_a
@@ -173,6 +185,7 @@ def generate_adversarial_disagreement(
     alpha: float = 0.005,
     steps: int = 20,
 ) -> Dict:
+    """seed 하나를 조금씩 바꿔서 disagreement 유지되는 입력 만드는 핵심 함수."""
     x_orig = seed["image"].unsqueeze(0).to(device)
     target_a = seed["pred_a"]
     target_b = seed["pred_b"]
@@ -187,9 +200,11 @@ def generate_adversarial_disagreement(
         logits_a = model_a(x_adv)
         logits_b = model_b(x_adv)
 
+        # seed에서 갖고 있던 서로 다른 예측을 계속 유지시키는 objective임.
         loss = objective_fn(logits_a, logits_b, target_a, target_b)
         grad = torch.autograd.grad(loss, x_adv)[0]
 
+        # sign gradient로 조금씩 움직이고 perturbation은 epsilon 안에 묶어둠.
         x_adv = x_adv + alpha * grad.sign()
         x_adv = clamp_linf(x_adv, x_orig, epsilon)
         x_adv = normalize_to_valid_range(x_adv, x_orig)
@@ -226,8 +241,10 @@ def generate_adversarial_disagreement(
 
 
 def save_result_figure(result: Dict, output_path: str) -> None:
+    """원본/생성 결과/차이 이미지를 한 장으로 저장하는 함수."""
     orig = denormalize(result["x_orig"]).permute(1, 2, 0).numpy()
     adv = denormalize(result["x_adv"]).permute(1, 2, 0).numpy()
+    # 차이 이미지는 그대로 보면 잘 안 보여서 보기 좋게 다시 스케일링함.
     diff = (adv - orig)
     diff = (diff - diff.min()) / (diff.max() - diff.min() + 1e-8)
 
@@ -261,6 +278,7 @@ def save_result_figure(result: Dict, output_path: str) -> None:
 
 
 def save_summary_csv(results: List[Dict], csv_path: str) -> None:
+    """생성 결과 요약 CSV 저장하는 함수."""
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow([
@@ -311,6 +329,7 @@ def main():
     coverage_a = NeuronCoverage(model_a, threshold=0.0)
     coverage_b = NeuronCoverage(model_b, threshold=0.0)
 
+    # baseline에서 이미 의견 갈리는 샘플을 seed로 쓰는 방식임.
     seeds = collect_seed_disagreements(
         model_a=model_a,
         model_b=model_b,

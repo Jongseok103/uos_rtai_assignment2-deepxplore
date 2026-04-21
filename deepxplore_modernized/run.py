@@ -8,6 +8,7 @@ from typing import Dict, List
 
 import torch
 
+# matplotlib 캐시 경로를 결과 폴더 아래로 고정해둠.
 os.environ.setdefault("MPLCONFIGDIR", str(Path("results/.mplconfig").resolve()))
 
 import matplotlib.pyplot as plt
@@ -24,6 +25,7 @@ from deepxplore_modernized.coverage import NeuronCoverageTracker
 
 
 def parse_args() -> argparse.Namespace:
+    """실행할 때 필요한 인자들 받는 부분."""
     parser = argparse.ArgumentParser(
         description="Modernized PyTorch DeepXplore-style disagreement generation for CIFAR-10 ResNet50 models."
     )
@@ -50,6 +52,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def resolve_device(device_arg: str) -> torch.device:
+    """환경 보고 CPU/GPU 뭐 쓸지 정하는 함수."""
     if device_arg == "cuda":
         if not torch.cuda.is_available():
             raise RuntimeError("CUDA was requested but is not available.")
@@ -67,6 +70,7 @@ def collect_seed_disagreements(
     device: torch.device,
     max_seeds: int,
 ) -> List[Dict]:
+    """두 모델이 서로 다르게 예측한 test 샘플을 seed로 모으는 함수."""
     seeds: List[Dict] = []
     global_index = 0
 
@@ -78,6 +82,7 @@ def collect_seed_disagreements(
         preds_b = model_b(images).argmax(dim=1)
 
         for batch_idx in range(labels.size(0)):
+            # 두 모델 예측이 이미 다른 샘플만 seed로 사용함.
             if preds_a[batch_idx].item() == preds_b[batch_idx].item():
                 continue
             seeds.append(
@@ -98,11 +103,14 @@ def collect_seed_disagreements(
 
 
 def clamp_linf(x_adv: torch.Tensor, x_orig: torch.Tensor, epsilon: float) -> torch.Tensor:
+    """입력 변형이 허용 범위 epsilon 안에만 있게 잘라주는 함수."""
     delta = torch.clamp(x_adv - x_orig, min=-epsilon, max=epsilon)
     return x_orig + delta
 
 
 def confidence_margin(logits: torch.Tensor, target_idx: int) -> torch.Tensor:
+    """target 클래스가 다른 클래스보다 얼마나 우세한지 보는 margin 계산 함수."""
+    # target 클래스가 나머지보다 얼마나 앞서는지 보는 값임.
     target_logit = logits[0, target_idx]
     mask = torch.ones_like(logits, dtype=torch.bool)
     mask[0, target_idx] = False
@@ -117,6 +125,8 @@ def compute_coverage_ratio(
     model_b: torch.nn.Module,
     x: torch.Tensor,
 ) -> float:
+    """입력 x 하나에 대한 두 모델 평균 coverage 계산하는 함수."""
+    # 샘플 하나 기준으로 두 모델 coverage 평균을 계산함.
     tracker_a.reset_coverage()
     tracker_b.reset_coverage()
     tracker_a.reset_current_activations()
@@ -139,6 +149,7 @@ def optimize_seed(
     weight_diff: float,
     weight_nc: float,
 ) -> Dict:
+    """seed 하나 기준으로 disagreement 유지랑 coverage 증가를 같이 최적화하는 핵심 함수."""
     x_orig = seed["image"].unsqueeze(0)
     x_adv = x_orig.clone().detach()
     target_a = seed["pred_a"]
@@ -157,11 +168,14 @@ def optimize_seed(
         uncovered_a = tracker_a.pick_uncovered_neuron()
         uncovered_b = tracker_b.pick_uncovered_neuron()
 
+        # loss_diff는 기존 disagreement 유지용,
+        # loss_nc는 새 뉴런 활성화 유도용임.
         loss_diff = confidence_margin(logits_a, target_a) + confidence_margin(logits_b, target_b)
         loss_nc = tracker_a.activation_term(uncovered_a) + tracker_b.activation_term(uncovered_b)
         final_objective = weight_diff * loss_diff + weight_nc * loss_nc
 
         grad = torch.autograd.grad(final_objective, x_adv)[0]
+        # 구현은 단순하게 FGSM 스타일 sign update로 감.
         x_adv = x_adv + alpha * grad.sign()
         x_adv = clamp_linf(x_adv.detach(), x_orig, epsilon)
 
@@ -192,10 +206,12 @@ def optimize_seed(
 
 
 def save_result_figure(result: Dict, output_path: str) -> None:
+    """원본/생성 이미지/perturbation 차이를 한 장에 저장하는 함수."""
     ensure_parent_dir(output_path)
 
     orig = denormalize(result["x_orig"]).permute(1, 2, 0).numpy()
     adv = denormalize(result["x_adv"]).permute(1, 2, 0).numpy()
+    # perturbation은 잘 안 보여서 그림 저장할 때 0~1로 다시 맞춰줌.
     diff = adv - orig
     diff = (diff - diff.min()) / (diff.max() - diff.min() + 1e-8)
 
@@ -227,6 +243,7 @@ def save_result_figure(result: Dict, output_path: str) -> None:
 
 
 def save_summary_csv(results: List[Dict], csv_path: str) -> None:
+    """각 seed 결과를 CSV로 저장하는 함수."""
     ensure_parent_dir(csv_path)
     with open(csv_path, "w", newline="", encoding="utf-8") as csv_file:
         writer = csv.writer(csv_file)
@@ -264,6 +281,7 @@ def save_summary_csv(results: List[Dict], csv_path: str) -> None:
 
 
 def print_run_summary(results: List[Dict], output_dir: str) -> None:
+    """실행 끝난 뒤 핵심 통계 콘솔에 요약 출력하는 함수."""
     success_count = sum(int(item["success"]) for item in results)
     average_cov_gain = (
         sum(item["after_cov"] - item["before_cov"] for item in results) / len(results) if results else 0.0
@@ -297,6 +315,7 @@ def main() -> None:
     tracker_a = NeuronCoverageTracker(model_a, threshold=args.coverage_threshold)
     tracker_b = NeuronCoverageTracker(model_b, threshold=args.coverage_threshold)
 
+    # baseline disagreement를 먼저 모아야 DeepXplore-style 최적화 시작 가능함.
     seeds = collect_seed_disagreements(
         model_a=model_a,
         model_b=model_b,
@@ -313,6 +332,7 @@ def main() -> None:
     results: List[Dict] = []
     for idx, seed in enumerate(seeds, start=1):
         seed["image"] = seed["image"].to(device)
+        # seed마다 perturbation은 따로 최적화함.
         result = optimize_seed(
             model_a=model_a,
             model_b=model_b,
@@ -333,6 +353,7 @@ def main() -> None:
             f"cov {result['before_cov']:.4f}->{result['after_cov']:.4f}"
         )
         if idx <= 5:
+            # 보고서에 쓰기 쉽게 앞쪽 몇 장만 PNG로 저장해둠.
             save_result_figure(result, str(output_dir / f"generated_disagreement_{idx:02d}.png"))
 
     save_summary_csv(results, str(output_dir / "generated_disagreement_summary.csv"))

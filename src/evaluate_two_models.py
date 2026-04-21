@@ -17,6 +17,7 @@ CIFAR10_CLASSES = [
 
 
 def set_seed(seed: int = 42) -> None:
+    """평가할 때도 결과 안 흔들리게 seed 맞추는 함수."""
     random.seed(seed)
     torch.manual_seed(seed)
     if torch.cuda.is_available():
@@ -24,7 +25,9 @@ def set_seed(seed: int = 42) -> None:
 
 
 def build_resnet50_for_cifar10() -> nn.Module:
+    """저장해둔 CIFAR-10 checkpoint랑 맞는 ResNet50 구조 만드는 부분."""
     model = models.resnet50(weights=None)
+    # 원래 ResNet50은 ImageNet 기준이라 CIFAR-10 크기에 맞게 앞부분만 수정했음.
     model.conv1 = nn.Conv2d(
         in_channels=3,
         out_channels=64,
@@ -39,6 +42,7 @@ def build_resnet50_for_cifar10() -> nn.Module:
 
 
 def load_model(checkpoint_path: str, device: torch.device) -> nn.Module:
+    """checkpoint 읽어서 바로 평가 가능한 모델로 준비하는 함수."""
     checkpoint = torch.load(checkpoint_path, map_location=device)
     model = build_resnet50_for_cifar10()
     model.load_state_dict(checkpoint["model_state_dict"])
@@ -48,6 +52,7 @@ def load_model(checkpoint_path: str, device: torch.device) -> nn.Module:
 
 
 def get_test_loader(batch_size: int = 128, num_workers: int = 2) -> DataLoader:
+    """CIFAR-10 test loader 만드는 부분."""
     mean = (0.4914, 0.4822, 0.4465)
     std = (0.2023, 0.1994, 0.2010)
 
@@ -74,6 +79,7 @@ def get_test_loader(batch_size: int = 128, num_workers: int = 2) -> DataLoader:
 
 
 def denormalize(img_tensor: torch.Tensor) -> torch.Tensor:
+    """normalize된 이미지를 다시 사람이 보기 좋은 범위로 돌려놓는 함수."""
     mean = torch.tensor([0.4914, 0.4822, 0.4465], device=img_tensor.device).view(3, 1, 1)
     std = torch.tensor([0.2023, 0.1994, 0.2010], device=img_tensor.device).view(3, 1, 1)
     img = img_tensor * std + mean
@@ -87,6 +93,7 @@ def evaluate_and_collect(
     loader: DataLoader,
     device: torch.device,
 ) -> Tuple[float, float, List[Dict]]:
+    """두 모델 accuracy도 보고, 서로 다르게 예측한 샘플도 같이 모으는 함수."""
     correct_a = 0
     correct_b = 0
     total = 0
@@ -110,6 +117,7 @@ def evaluate_and_collect(
 
         batch_size = labels.size(0)
         for i in range(batch_size):
+            # DeepXplore 시작할 때 쓸 baseline disagreement 샘플 모으는 부분임.
             if preds_a[i].item() != preds_b[i].item():
                 disagreements.append({
                     "index": global_index + i,
@@ -127,6 +135,7 @@ def evaluate_and_collect(
 
 
 def save_csv(disagreements: List[Dict], csv_path: str) -> None:
+    """모아둔 disagreement 정보를 CSV로 저장하는 함수."""
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["index", "true_label", "pred_a", "pred_b"])
@@ -140,11 +149,13 @@ def save_csv(disagreements: List[Dict], csv_path: str) -> None:
 
 
 def save_visualizations(disagreements: List[Dict], output_dir: str, max_save: int = 5) -> None:
+    """대표 disagreement 샘플 몇 개만 그림으로 저장하는 함수."""
     os.makedirs(output_dir, exist_ok=True)
 
     num_to_save = min(max_save, len(disagreements))
     for i in range(num_to_save):
         item = disagreements[i]
+        # 저장용 그림은 사람이 봐야 하니까 normalize를 다시 풀어줌.
         image = denormalize(item["image"]).permute(1, 2, 0).numpy()
 
         plt.figure(figsize=(4, 4))
@@ -188,6 +199,7 @@ def main():
 
     test_loader = get_test_loader(batch_size=128, num_workers=2)
 
+    # 먼저 두 모델 기본 성능이랑 disagreement 개수부터 확인해둠.
     acc_a, acc_b, disagreements = evaluate_and_collect(
         model_a=model_a,
         model_b=model_b,

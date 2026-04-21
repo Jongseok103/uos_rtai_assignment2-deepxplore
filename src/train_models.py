@@ -12,6 +12,7 @@ from torchvision import datasets, transforms, models
 
 @dataclass
 class TrainConfig:
+    # 모델 두 개를 일부러 다르게 학습시켜야 disagreement가 잘 생긴다.
     model_name: str
     seed: int
     batch_size: int = 128
@@ -25,6 +26,7 @@ class TrainConfig:
 
 
 def set_seed(seed: int) -> None:
+    """실험 다시 돌렸을 때 결과가 크게 안 흔들리게 seed 고정하는 함수임."""
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -33,10 +35,13 @@ def set_seed(seed: int) -> None:
 
 
 def build_transforms(use_strong_aug: bool):
+    """CIFAR-10 학습/평가용 transform 만드는 부분."""
     mean = (0.4914, 0.4822, 0.4465)
     std = (0.2023, 0.1994, 0.2010)
 
     if use_strong_aug:
+        # model_b 쪽은 augmentation을 더 세게 줘서
+        # model_a랑 decision boundary가 좀 다르게 나오게 해둠.
         train_transform = transforms.Compose([
             transforms.RandomCrop(32, padding=4),
             transforms.RandomHorizontalFlip(),
@@ -61,6 +66,7 @@ def build_transforms(use_strong_aug: bool):
 
 
 def build_dataloaders(batch_size: int, num_workers: int, use_strong_aug: bool):
+    """학습에 바로 쓸 train/test DataLoader 만드는 함수."""
     train_transform, test_transform = build_transforms(use_strong_aug)
 
     train_dataset = datasets.CIFAR10(
@@ -94,9 +100,10 @@ def build_dataloaders(batch_size: int, num_workers: int, use_strong_aug: bool):
 
 
 def build_resnet50_for_cifar10() -> nn.Module:
+    """ResNet50을 CIFAR-10용으로 살짝 바꿔서 만드는 함수."""
     model = models.resnet50(weights=None)
 
-    # CIFAR-10 (32x32)에 맞게 초기 stem을 가볍게 조정
+    # CIFAR-10이 32x32라서 앞단 stem을 좀 가볍게 바꿔줌.
     model.conv1 = nn.Conv2d(
         in_channels=3,
         out_channels=64,
@@ -111,6 +118,8 @@ def build_resnet50_for_cifar10() -> nn.Module:
 
 
 def build_optimizer(model: nn.Module, cfg: TrainConfig):
+    """설정값 보고 optimizer 고르는 부분."""
+    # optimizer도 다르게 써서 두 모델 성향 차이가 조금 나게 함.
     if cfg.optimizer_name.lower() == "sgd":
         return optim.SGD(
             model.parameters(),
@@ -129,6 +138,7 @@ def build_optimizer(model: nn.Module, cfg: TrainConfig):
 
 
 def evaluate(model: nn.Module, loader: DataLoader, device: torch.device):
+    """현재 모델 test accuracy 보는 함수."""
     model.eval()
     correct = 0
     total = 0
@@ -148,6 +158,7 @@ def evaluate(model: nn.Module, loader: DataLoader, device: torch.device):
 
 
 def train_one_model(cfg: TrainConfig, device: torch.device):
+    """모델 하나 학습시키고 best checkpoint 저장까지 담당하는 함수."""
     print(f"\n===== Training {cfg.model_name} =====")
     print(cfg)
 
@@ -163,6 +174,7 @@ def train_one_model(cfg: TrainConfig, device: torch.device):
     optimizer = build_optimizer(model, cfg)
 
     if cfg.optimizer_name.lower() == "sgd":
+        # SGD일 때만 cosine scheduler 붙였음.
         scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cfg.epochs)
     else:
         scheduler = None
@@ -199,6 +211,7 @@ def train_one_model(cfg: TrainConfig, device: torch.device):
 
         if test_acc > best_acc:
             best_acc = test_acc
+            # 마지막 epoch가 아니라 제일 잘 나온 시점 저장하는 방식임.
             torch.save(
                 {
                     "model_state_dict": model.state_dict(),
@@ -218,6 +231,8 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device:", device)
 
+    # seed, optimizer, augmentation을 다르게 줘서
+    # 두 모델이 같은 데이터라도 예측이 좀 갈리게 유도했음.
     cfg_a = TrainConfig(
         model_name="model_a",
         seed=42,

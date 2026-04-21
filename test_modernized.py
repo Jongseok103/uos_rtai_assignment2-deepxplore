@@ -4,6 +4,7 @@ import sys
 
 
 def run_command(cmd):
+    """테스트용 명령 실행하고 실패하면 예외 띄우는 함수."""
     print("\n" + "=" * 80)
     print("Running:", " ".join(cmd))
     print("=" * 80)
@@ -13,6 +14,7 @@ def run_command(cmd):
 
 
 def check_required_files():
+    """smoke test 돌리기 전에 필요한 파일 있는지 확인함."""
     required = [
         "models/model_a.pth",
         "models/model_b.pth",
@@ -27,6 +29,7 @@ def check_required_files():
 
 def main():
     check_required_files()
+    # smoke test라 seed 수랑 step 수 작게 잡고 빠르게만 확인함.
     run_command(
         [
             sys.executable,

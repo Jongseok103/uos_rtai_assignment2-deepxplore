@@ -7,6 +7,7 @@ from typing import Dict, List
 
 
 def parse_args() -> argparse.Namespace:
+    """비교할 CSV 경로들 받는 부분."""
     parser = argparse.ArgumentParser(description="Compare legacy src and modernized DeepXplore result summaries.")
     parser.add_argument("--baseline-csv", default="results/generated_disagreement_summary.csv")
     parser.add_argument(
@@ -21,6 +22,7 @@ def parse_args() -> argparse.Namespace:
 
 
 def load_rows(csv_path: str) -> List[Dict[str, str]]:
+    """CSV 읽어서 행 단위 dict 리스트로 바꿔주는 함수."""
     path = Path(csv_path)
     if not path.exists():
         raise FileNotFoundError(f"Missing CSV for comparison: {csv_path}")
@@ -29,6 +31,7 @@ def load_rows(csv_path: str) -> List[Dict[str, str]]:
 
 
 def summarize(rows: List[Dict[str, str]]) -> Dict[str, float]:
+    """실험 결과를 핵심 지표 몇 개로 요약하는 함수."""
     if not rows:
         return {
             "num_seeds": 0,
@@ -38,6 +41,7 @@ def summarize(rows: List[Dict[str, str]]) -> Dict[str, float]:
             "avg_l2": 0.0,
         }
 
+    # 두 결과를 같은 기준으로 비교하려고 핵심 지표만 평균으로 정리했음.
     cov_gain = sum(float(row["after_cov"]) - float(row["before_cov"]) for row in rows)
     success_count = sum(int(row["success"]) for row in rows)
     return {
@@ -50,6 +54,7 @@ def summarize(rows: List[Dict[str, str]]) -> Dict[str, float]:
 
 
 def save_summary(output_csv: str, baseline: Dict[str, float], modernized: Dict[str, float]) -> None:
+    """두 결과 요약을 한 CSV에 나란히 저장하는 함수."""
     path = Path(output_csv)
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", newline="", encoding="utf-8") as csv_file:
