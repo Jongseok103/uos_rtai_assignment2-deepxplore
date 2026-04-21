@@ -61,11 +61,11 @@ python -m deepxplore_modernized.run \
 완전히 원 논문 구현을 그대로 복원한 것은 아니고, 과제 환경에서 실행 가능하도록 DeepXplore의 핵심 아이디어를 가져와 재구성한 버전이다.
 
 ## 결과물
-실행이 끝나면 결과는 `results/` 아래에 저장된다.
+실행이 끝나면 결과는 `results/` 아래에 저장되며, 현대화한 DeepXplore 실행 결과는 주로 `results/deepxplore_modernized/`에 정리된다.
 
 주요 결과물:
 - disagreement 요약 CSV
-- 생성된 disagreement input 시각화 PNG 5장 이상
+- 생성된 disagreement input 시각화 PNG 5장
 
 실행 중 기록되는 값:
 - disagreement-inducing input 개수
